@@ -6,11 +6,9 @@
 
     var PLUGIN_ID = 'should_watch_plugin';
     var ICON = '<svg viewBox="0 0 100 100" width="30" height="30" xmlns="http://www.w3.org/2000/svg"><g stroke="currentColor" stroke-width="8" stroke-linecap="square" fill="none"><path d="M20,55 L40,75 L80,25"/><path d="M25,25 L75,75" stroke-dasharray="4,4"/></g></svg>';
-    var currentModalHtml = null;
-    var isRolling = false;
 
     /* ==========================================================================
-       НАСТРОЙКИ (по образцу Opinions & Reviews v2.3)
+       НАСТРОЙКИ
        ========================================================================== */
 
     function getSetting(key, def) {
@@ -18,8 +16,6 @@
             var fullKey = PLUGIN_ID + '_' + key;
             var val = Lampa.Storage.get(fullKey);
             if (val !== undefined && val !== null && val !== '') return val;
-            var ns = Lampa.Storage.get(PLUGIN_ID, {});
-            if (ns && ns[key] !== undefined && ns[key] !== '') return ns[key];
         } catch(e) {}
         return def;
     }
@@ -27,9 +23,6 @@
     function saveSetting(key, value) {
         try {
             Lampa.Storage.set(PLUGIN_ID + '_' + key, value);
-            var ns = Lampa.Storage.get(PLUGIN_ID, {});
-            ns[key] = value;
-            Lampa.Storage.set(PLUGIN_ID, ns);
         } catch(e) {}
     }
 
@@ -43,7 +36,8 @@
     }
 
     function parseBL(str) {
-        return str ? str.toLowerCase().split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
+        if (!str || typeof str !== 'string') return [];
+        return str.split(',').map(function(s) { return s.trim().toLowerCase(); }).filter(Boolean);
     }
 
     function initSettings() {
@@ -74,7 +68,7 @@
     }
 
     /* ==========================================================================
-       СТИЛИ
+       СТИЛИ (TV-адаптация: фокус, скролл, безопасная зона)
        ========================================================================== */
 
     function injectCSS() {
@@ -82,21 +76,21 @@
         var s = document.createElement('style');
         s.id = 'sw-plugin-styles';
         s.innerHTML =
-            '.sw-modal-content{padding:15px;color:#fff;font-family:sans-serif;max-height:80vh;overflow:hidden}' +
+            '.sw-modal-content{padding:20px;color:#fff;font-family:sans-serif}' +
+            '.sw-dice-section{text-align:center;margin-bottom:30px;padding:20px;background:rgba(255,255,255,.03);border-radius:12px}' +
+            '.sw-dice-btn{background:#eadecd;color:#1a1a1a;font-size:1.4em;font-weight:bold;padding:15px 40px;border-radius:30px;display:inline-flex;align-items:center;gap:15px;transition:transform .2s,background .2s,box-shadow .2s;cursor:pointer;outline:none;border:3px solid transparent}' +
+            '.sw-dice-btn.focus{background:#fff;transform:scale(1.05);box-shadow:0 0 0 3px #fff,0 0 20px rgba(255,255,255,.4);border-color:#fff}' +
+            '.sw-dice-btn.shake{animation:swShake .5s}' +
+            '.sw-verdict{margin-top:15px;font-size:1.6em;font-weight:bold;min-height:40px;text-transform:uppercase}' +
+            '.sw-verdict.verdict-yes{color:#85c25e!important;text-shadow:0 0 10px rgba(133,194,94,.3)}' +
+            '.sw-verdict.verdict-no{color:#d9534f!important;text-shadow:0 0 10px rgba(217,83,79,.3)}' +
             '.sw-columns{display:flex;justify-content:space-between;gap:20px;margin-bottom:25px}' +
-            '.sw-col{flex:1;background:rgba(255,255,255,.05);padding:15px;border-radius:10px;max-height:35vh;overflow-y:auto;scroll-behavior:smooth}' +
-            '.sw-col::-webkit-scrollbar{width:4px}' +
-            '.sw-col::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:2px}' +
+            '.sw-col{flex:1;background:rgba(255,255,255,.05);padding:15px;border-radius:10px}' +
             '.sw-title{font-size:1.1em;font-weight:bold;margin-bottom:15px;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:10px}' +
             '.sw-title.pros{color:#85c25e}.sw-title.cons{color:#d9534f}.sw-title.target{color:#e0e0e0}' +
-            '.sw-list{margin:0;padding-left:20px;font-size:.95em;line-height:1.4;color:#ccc}' +
-            '.sw-list li{margin-bottom:8px}' +
-            '.sw-target-audience{margin-bottom:30px;background:rgba(255,255,255,.05);padding:15px;border-radius:10px}' +
-            '.sw-dice-wrapper{text-align:center;margin-top:10px}' +
-            '.sw-dice-btn{background:#eadecd;color:#1a1a1a;font-size:1.4em;font-weight:bold;padding:15px 30px;border-radius:30px;display:inline-flex;align-items:center;gap:15px;transition:transform .2s,background .2s;cursor:pointer;outline:none}' +
-            '.sw-dice-btn.focus{background:#fff;transform:scale(1.05);box-shadow:0 0 15px rgba(255,255,255,.3)}' +
-            '.sw-dice-btn.shake{animation:swShake .5s}' +
-            '.sw-verdict{margin-top:15px;font-size:1.5em;font-weight:bold;min-height:35px;text-transform:uppercase}' +
+            '.sw-list{margin:0;padding-left:20px;font-size:.95em;line-height:1.5;color:#ccc}' +
+            '.sw-list li{margin-bottom:10px}' +
+            '.sw-target-audience{background:rgba(255,255,255,.05);padding:20px;border-radius:10px;line-height:1.6;color:#ddd;font-size:1.05em}' +
             '@keyframes swShake{0%,100%{transform:translate(1px,-2px) rotate(-1deg)}10%,30%,50%,70%,90%{transform:translate(-1px,2px) rotate(1deg)}20%,40%,60%,80%{transform:translate(-3px,0) rotate(0deg)}}';
         document.head.appendChild(s);
     }
@@ -108,7 +102,7 @@
     function esc(s) { return typeof s === 'string' ? $('<div>').text(s).html() : ''; }
 
     function loadCredits(movie) {
-        if (movie.credits && (movie.credits.cast && movie.credits.cast.length || movie.credits.crew && movie.credits.crew.length)) {
+        if (movie.credits && ((movie.credits.cast && movie.credits.cast.length) || (movie.credits.crew && movie.credits.crew.length))) {
             return Promise.resolve(movie.credits);
         }
         var id = movie.id || movie.tmdb_id;
@@ -123,25 +117,21 @@
         return Promise.resolve(null);
     }
 
-    // Экспорт внутренних переменных и функций для Части 2
     window._sw_internal = {
         PLUGIN_ID: PLUGIN_ID,
         ICON: ICON,
-        currentModalHtml: currentModalHtml,
-        isRolling: isRolling,
         getSettings: getSettings,
         parseBL: parseBL,
         esc: esc,
         loadCredits: loadCredits,
         initSettings: initSettings,
         injectCSS: injectCSS
-    }
-    // Подхватываем экспортированные данные из Части 1
-    if (!window._sw_internal) return;
+    } if (!window._sw_internal) return;
     var _sw = window._sw_internal;
+    var isRolling = false;
 
     /* ==========================================================================
-       АНАЛИЗАТОР (расширенный v7)
+       АНАЛИЗАТОР v8 (живые тексты + исправленные черные списки)
        ========================================================================== */
 
     function analyze(movie) {
@@ -164,7 +154,6 @@
             var kpRating = parseFloat(movie.rating_kp) || 0;
             var imdbRating = parseFloat(movie.rating_imdb) || 0;
 
-            // Качество
             var qualityStr = (movie.quality || movie.source_quality || '').toString().toUpperCase();
             var maxQuality = '';
             if (/2160|4K|UHD/.test(qualityStr)) maxQuality = '4K UHD';
@@ -173,8 +162,6 @@
             else if (/WEB-DL|WEBRIP/i.test(qualityStr)) maxQuality = 'WEB-DL';
             else if (/BDRIP|BLURAY/i.test(qualityStr)) maxQuality = 'BluRay';
             else if (qualityStr) maxQuality = qualityStr;
-
-            // Плохое качество (экранки)
             var isBadQuality = /CAM|TS|HDCAM|HDRIP|TELECINE|SCR|WORKPRINT/i.test(qualityStr);
 
             var cast = (credits && credits.cast || []).slice(0, 15).map(function(c){return c.name;}).filter(Boolean);
@@ -184,197 +171,139 @@
 
             var P = [], C = [];
 
-            // --- ЧЁРНЫЕ СПИСКИ ---
-            var mG = genres.filter(function(g){return blG.some(function(b){return g.toLowerCase().indexOf(b) >= 0;});});
-            var mA = cast.filter(function(a){return blA.some(function(b){return a.toLowerCase().indexOf(b) >= 0;});});
-            var mD = [].concat(dirs, wrts).filter(function(p){return blD.some(function(b){return p.toLowerCase().indexOf(b) >= 0;});});
+            // Чёрные списки (исправленный поиск)
+            var mG = genres.filter(function(g){ var gl = g.toLowerCase(); return blG.some(function(b){return gl.indexOf(b) >= 0;}); });
+            var mA = cast.filter(function(a){ var al = a.toLowerCase(); return blA.some(function(b){return al.indexOf(b) >= 0;}); });
+            var mD = [].concat(dirs, wrts).filter(function(p){ var pl = p.toLowerCase(); return blD.some(function(b){return pl.indexOf(b) >= 0;}); });
             if (mG.length) C.push('⛔ Нелюбимый жанр: ' + mG.join(', '));
             if (mA.length) C.push('⛔ Нелюбимый актёр: ' + [...new Set(mA)].slice(0,2).join(', '));
             if (mD.length) C.push('⛔ Нелюбимый автор: ' + [...new Set(mD)].slice(0,2).join(', '));
 
-            // --- КАЧЕСТВО ---
-            if (isBadQuality) C.push('📺 Низкое качество: ' + (qualityStr || 'CAM/TS') + ' — возможен плохой звук/картинка');
+            if (isBadQuality) C.push('📺 Низкое качество: ' + (qualityStr || 'CAM/TS'));
             if (maxQuality && !isBadQuality) P.push('🎬 Макс. качество: ' + maxQuality);
 
-            // --- РЕКЛАМА / КАЗИНО / СТАВКИ ---
-            var adKeywords = ['казино', 'casino', 'бетсити', 'betcity', '1xbet', 'винлайн', 'winline', 'фонбет', 'fonbet', 'ставка', 'ставки на спорт', 'букмекер', 'bookmaker', 'партнёр', 'реклама', 'промокод', 'promocode', 'спонсор'];
+            var adKeywords = ['казино','casino','бетсити','betcity','1xbet','винлайн','winline','фонбет','fonbet','ставка','ставки на спорт','букмекер','bookmaker','промокод','promocode','спонсор'];
             var ovLower = ov.toLowerCase();
-            var foundAds = adKeywords.filter(function(kw){return ovLower.indexOf(kw) >= 0;});
-            if (foundAds.length) C.push('🎰 Возможна реклама: ' + foundAds.slice(0,3).join(', '));
+            var fAds = adKeywords.filter(function(kw){return ovLower.indexOf(kw) >= 0;});
+            if (fAds.length) C.push('🎰 Возможна реклама: ' + fAds.slice(0,3).join(', '));
 
-            // --- ПЛОХОЙ СЮЖЕТ ПО МНЕНИЮ ЗРИТЕЛЕЙ ---
-            var plotConsensus = false;
-            if (r > 0 && r < 5 && vc >= 100) plotConsensus = true;
-            if (kpRating > 0 && kpRating < 5 && imdbRating > 0 && imdbRating < 5) plotConsensus = true;
-            var badPlotWords = ['скучный', 'предсказуемый', 'затянутый', 'нелогичный', 'дыры в сюжете', 'слабый сюжет', 'разочарование', 'boring', 'predictable', 'plot holes', 'weak story', 'disappointing'];
-            var hasBadPlotWords = badPlotWords.some(function(w){return ovLower.indexOf(w) >= 0;});
-            if (plotConsensus && hasBadPlotWords) C.push('👎 Плохой сюжет по мнению зрителей: низкие оценки + негативные отзывы');
-            else if (plotConsensus) C.push('👎 Слабые оценки зрителей: возможный слабый сюжет');
-            else if (hasBadPlotWords && vc >= 50) C.push('👎 В отзывах упоминаются проблемы с сюжетом');
+            var plotBad = (r > 0 && r < 5 && vc >= 100) || (kpRating > 0 && kpRating < 5 && imdbRating > 0 && imdbRating < 5);
+            var badWords = ['скучный','предсказуемый','затянутый','нелогичный','дыры в сюжете','слабый сюжет','boring','predictable','plot holes'];
+            var hasBadW = badWords.some(function(w){return ovLower.indexOf(w) >= 0;});
+            if (plotBad && hasBadW) C.push('👎 Плохой сюжет по мнению зрителей');
+            else if (plotBad) C.push('👎 Слабые оценки зрителей');
 
-            // --- РЕЙТИНГ + ГОЛОСА ---
             if (r > 0 && r < minR) C.push('📉 Рейтинг ' + r.toFixed(1) + ' ниже порога (' + minR + ')');
-            if (vc < 30 && r > 0) C.push('❓ Всего ' + vc + ' оценок — недостоверно');
-            if (vc < 10 && r > 0) C.push('⚠️ Менее 10 оценок — лотерея');
-            if (r >= minR && vc >= 200) P.push('⭐ Надёжный рейтинг: ' + r.toFixed(1) + ' (' + vc + ' голосов)');
-            else if (r >= minR && vc >= 50) P.push('⭐ Рейтинг ' + r.toFixed(1) + ' (' + vc + ' голосов)');
-            else if (r >= minR && vc > 0) P.push('⭐ Рейтинг ' + r.toFixed(1) + ', мало голосов (' + vc + ')');
-            if (r >= 8 && vc >= 500) P.push('🏆 Выбор зрителей: ' + r.toFixed(1) + ' из ' + vc);
-
-            // --- СЮЖЕТ ---
+            if (vc < 30 && r > 0) C.push('❓ Всего ' + vc + ' оценок');
+            if (r >= minR && vc >= 200) P.push('⭐ Надёжный рейтинг: ' + r.toFixed(1) + ' (' + vc + ')');
+            else if (r >= minR && vc >= 50) P.push('⭐ Рейтинг ' + r.toFixed(1) + ' (' + vc + ')');
+            if (r >= 8 && vc >= 500) P.push('🏆 Выбор зрителей: ' + r.toFixed(1));
             if (!ov) C.push('📭 Нет описания сюжета');
-            else if (ov.length < 40) C.push('📝 Короткое описание (' + ov.length + ' симв.)');
+            else if (ov.length < 40) C.push('📝 Короткое описание');
             else if (ov.length > 300) P.push('📖 Развёрнутая аннотация');
-            else if (ov.length > 100) P.push('📖 Есть описание сюжета');
-
-            // --- ДЛИТЕЛЬНОСТЬ ---
             if (rt > 200) C.push('⏱ Эпик: ' + rt + ' мин.');
-            else if (rt > 180) C.push('⏱ Очень длинный: ' + rt + ' мин.');
             else if (rt > 0 && rt <= 130) P.push('⏱ Комфортно: ' + rt + ' мин.');
-            else if (rt > 0 && rt < 60) C.push('⏱ Короткометражка: ' + rt + ' мин.');
-
-            // --- ЛЮДИ ---
             if (dirs.length && !mD.length) P.push('🎬 Режиссёр: ' + dirs[0]);
             if (wrts.length && !mD.length) P.push('✍️ Сценарист: ' + wrts[0]);
             if (cast.length > 0 && !mA.length) P.push('🎭 В ролях: ' + cast.slice(0,3).join(', '));
-
-            // --- ЖАНРЫ / ПРОЧЕЕ ---
             if (genres.length && !mG.length) P.push('🎞 ' + genres.slice(0,2).join(', '));
-            if (lang === 'ru') P.push('🇷🇺 Оригинальный русский язык');
-            else if (lang === 'en') P.push('🌍 Оригинал на английском');
+            if (lang === 'ru') P.push('🇷🇺 Русский язык');
             if (adult) C.push('🔞 Контент 18+');
             if (seq) P.push('🔗 Часть франшизы');
             if (origTitle && origTitle !== movie.title && origTitle !== movie.name) P.push('🏷 Ориг.: ' + origTitle);
-
             if (!P.length) P.push('ℹ️ Недостаточно метаданных');
             if (!C.length) C.push('✅ Противопоказаний не выявлено');
 
-            // --- КОМУ СМОТРЕТЬ (комбинаторика) ---
-            var aud = [];
-            if (genres.length && !mG.length && cast.length && !mA.length) aud.push('тем, кому нравится ' + genres[0] + ' с ' + cast[0]);
-            else if (genres.length && !mG.length) aud.push('поклонникам «' + genres[0] + '»');
-            if (dirs.length && !mD.length && r >= 7) aud.push('ценителям стиля ' + dirs[0]);
-            else if (dirs.length && !mD.length) aud.push('следящим за ' + dirs[0]);
-            if (r >= 8 && vc >= 500) aud.push('доверяющим массовому выбору');
-            else if (r >= 7 && vc >= 100) aud.push('ориентирующимся на рейтинг');
-            if (maxQuality && !isBadQuality) aud.push('любителям качественного изображения');
-            if (rt > 0 && rt <= 100) aud.push('у кого мало времени');
-            if (lang === 'ru') aud.push('предпочитающим русское кино');
-            if (seq) aud.push('фанатам франшизы');
+            // --- ЖИВАЯ РЕКОМЕНДАЦИЯ (не шаблон) ---
+            var parts = [];
+            if (genres.length && !mG.length) {
+                if (cast.length && !mA.length && dirs.length && !mD.length) {
+                    parts.push(genres[0] + ' от режиссёра ' + dirs[0] + ' с участием ' + cast[0]);
+                } else if (cast.length && !mA.length) {
+                    parts.push(genres[0] + ', где играет ' + cast[0]);
+                } else if (dirs.length && !mD.length) {
+                    parts.push(genres[0] + ' в стиле ' + dirs[0]);
+                } else {
+                    parts.push(genres[0]);
+                }
+            }
+            if (r >= 7.5 && vc >= 200) parts.push('высокие оценки ' + vc + ' зрителей подтверждают качество');
+            else if (r >= minR && vc >= 50) parts.push('рейтинг ' + r.toFixed(1) + ' выглядит убедительно');
+            if (maxQuality && !isBadQuality) parts.push('доступно в ' + maxQuality);
+            if (rt > 0 && rt <= 100) parts.push('хватит на вечер без усталости');
+            else if (rt > 150) parts.push('потребуется свободное время (' + rt + ' мин.)');
+            if (seq) parts.push('продолжение известной истории');
+            if (lang === 'ru') parts.push('родной язык оригинала');
 
             var audience;
-            if (aud.length >= 2) audience = 'Идеально подойдёт ' + aud.slice(0,3).join('; ') + '.';
-            else if (aud.length === 1) audience = 'Стоит попробовать ' + aud[0] + '.';
-            else audience = 'Подходит для просмотра без ожиданий.';
+            if (parts.length >= 3) {
+                audience = 'Этот фильм может зацепить тех, кто ищет ' + parts[0] + '. ' + parts[1].charAt(0).toUpperCase() + parts[1].slice(1) + ', а ' + parts.slice(2).join('; ') + '.';
+            } else if (parts.length === 2) {
+                audience = 'Подойдёт тем, кому интересен ' + parts[0] + ' — ' + parts[1] + '.';
+            } else if (parts.length === 1) {
+                audience = 'Может понравиться, если вам близок ' + parts[0] + '.';
+            } else {
+                audience = 'Нет явных причин ни за, ни против — можно рискнуть.';
+            }
 
             return { pros: P, cons: C, audience: audience };
         });
     }
 
     /* ==========================================================================
-       КОНТРОЛЛЕР С ПРОКРУТКОЙ
-       ========================================================================== */
-
-    function registerController() {
-        Lampa.Controller.add('should_watch_modal', {
-            toggle: function() {
-                if (_sw.currentModalHtml) {
-                    Lampa.Controller.collectionSet(_sw.currentModalHtml);
-                    var b = _sw.currentModalHtml.find('#sw-dice-btn');
-                    if (b.length) Lampa.Controller.collectionFocus(b);
-                    else Lampa.Controller.collectionFocus(false, _sw.currentModalHtml);
-                }
-            },
-            up: function() {
-                var col = _sw.currentModalHtml && _sw.currentModalHtml.find('.sw-col-active');
-                if (col && col.length && col.scrollTop() > 0) col.animate({scrollTop: col.scrollTop() - 80}, 150);
-            },
-            down: function() {
-                var col = _sw.currentModalHtml && _sw.currentModalHtml.find('.sw-col-active');
-                if (col && col.length) {
-                    var max = col[0].scrollHeight - col.outerHeight();
-                    if (col.scrollTop() < max) col.animate({scrollTop: col.scrollTop() + 80}, 150);
-                }
-            },
-            left: function() {
-                if (!_sw.currentModalHtml) return;
-                _sw.currentModalHtml.find('.sw-col:last').addClass('sw-col-active');
-                _sw.currentModalHtml.find('.sw-col:first').removeClass('sw-col-active');
-            },
-            right: function() {
-                if (!_sw.currentModalHtml) return;
-                _sw.currentModalHtml.find('.sw-col:first').addClass('sw-col-active');
-                _sw.currentModalHtml.find('.sw-col:last').removeClass('sw-col-active');
-            },
-            back: function() {
-                _sw.isRolling = false;
-                Lampa.Modal.close();
-                Lampa.Controller.toggle('full');
-            }
-        });
-    }
-
-    /* ==========================================================================
-       МОДАЛКА
+       МОДАЛКА (TV-канон: нативный скролл, кнопка наверху)
        ========================================================================== */
 
     function showModal(movie) {
         var title = _sw.esc(movie.title || movie.name || 'Фильм');
-        var loading = $('<div class="sw-modal-content" style="text-align:center;padding:40px"><div style="font-size:2em;margin-bottom:15px">⏳</div><div style="color:#ccc">Анализируем...</div></div>');
+        var loading = $('<div class="sw-modal-content" style="text-align:center;padding:60px"><div style="font-size:2em;margin-bottom:15px">⏳</div><div style="color:#ccc">Анализируем...</div></div>');
 
         Lampa.Modal.open({
             title: 'Стоит ли смотреть: ' + title,
             html: loading,
-            size: 'medium',
-            zIndex: 1000,
-            onBack: function() { _sw.currentModalHtml = null; _sw.isRolling = false; Lampa.Controller.toggle('full'); }
+            size: 'large',
+            zIndex: 1000
         });
 
         analyze(movie).then(function(a) {
+            // Кнопка и вердикт НАВЕРХУ — всегда в безопасной зоне TV
             var html = $(
-                '<div class="sw-modal-content">' +
-                    '<div class="sw-columns">' +
-                        '<div class="sw-col sw-col-active"><div class="sw-title pros">Почему стоит ✓</div><ul class="sw-list">' + a.pros.map(function(p){return '<li>' + _sw.esc(p) + '</li>';}).join('') + '</ul></div>' +
-                        '<div class="sw-col"><div class="sw-title cons">Почему не стоит ✗</div><ul class="sw-list">' + a.cons.map(function(c){return '<li>' + _sw.esc(c) + '</li>';}).join('') + '</ul></div>' +
-                    '</div>' +
-                    '<div class="sw-target-audience"><div class="sw-title target">Кому посмотреть? 🎯</div><div style="color:#ccc;line-height:1.5">' + _sw.esc(a.audience) + '</div></div>' +
-                    '<div class="sw-dice-wrapper">' +
+                '<div class="sw-modal-content scroll-mask">' +
+                    '<div class="sw-dice-section">' +
                         '<div class="sw-dice-btn selector" id="sw-dice-btn"><span style="font-size:1.5em">🎲</span> Бросить кости</div>' +
                         '<div class="sw-verdict" id="sw-verdict"></div>' +
                     '</div>' +
+                    '<div class="sw-columns">' +
+                        '<div class="sw-col"><div class="sw-title pros">Почему стоит ✓</div><ul class="sw-list">' + a.pros.map(function(p){return '<li>' + _sw.esc(p) + '</li>';}).join('') + '</ul></div>' +
+                        '<div class="sw-col"><div class="sw-title cons">Почему не стоит ✗</div><ul class="sw-list">' + a.cons.map(function(c){return '<li>' + _sw.esc(c) + '</li>';}).join('') + '</ul></div>' +
+                    '</div>' +
+                    '<div class="sw-target-audience"><div class="sw-title target">Кому посмотреть? 🎯</div><div>' + _sw.esc(a.audience) + '</div></div>' +
                 '</div>'
             );
 
-            _sw.currentModalHtml = html;
-
             html.find('#sw-dice-btn').on('hover:enter click keydown', function(e) {
                 if (e.type === 'keydown' && e.keyCode !== 13 && e.keyCode !== 32) return;
-                if (_sw.isRolling) return;
-                _sw.isRolling = true;
-
-                var btn = $(this);
-                var v = html.find('#sw-verdict');
-
+                if (isRolling) return;
+                isRolling = true;
+                var btn = $(this), v = html.find('#sw-verdict');
                 v.attr('style', '').attr('class', 'sw-verdict').text('');
                 btn.addClass('shake');
-
                 setTimeout(function() {
                     btn.removeClass('shake');
-                    var yes = Math.random() > 0.5;
-                    if (yes) {
-                        v.text('Смотреть!').attr('class', 'sw-verdict verdict-yes')
-                         .attr('style', 'color:#85c25e!important;text-shadow:0 0 10px rgba(133,194,94,.3)');
+                    if (Math.random() > 0.5) {
+                        v.text('Смотреть!').addClass('verdict-yes').css({color:'#85c25e',textShadow:'0 0 10px rgba(133,194,94,.3)'});
                     } else {
-                        v.text('Не смотреть').attr('class', 'sw-verdict verdict-no')
-                         .attr('style', 'color:#d9534f!important;text-shadow:0 0 10px rgba(217,83,79,.3)');
+                        v.text('Не смотреть').addClass('verdict-no').css({color:'#d9534f',textShadow:'0 0 10px rgba(217,83,79,.3)'});
                     }
                     Lampa.Controller.collectionFocus(btn);
-                    _sw.isRolling = false;
+                    isRolling = false;
                 }, 500);
             });
 
             Lampa.Modal.update(html);
-            Lampa.Controller.toggle('should_watch_modal');
+
+            // Нативный контроллер модалки Lampa = правильный скролл + фокус
+            Lampa.Controller.toggle('modal');
         });
     }
 
@@ -395,25 +324,19 @@
     }
 
     /* ==========================================================================
-       ЗАПУСК ПЛАГИНА (по образцу appready)
+       ЗАПУСК
        ========================================================================== */
 
     function startPlugin() {
         try {
             Lampa.Listener.follow('full', function(e) {
                 if (e.type !== 'complite') return;
-                try {
-                    var render = e.object.activity.render();
-                    addBtn(render, e.data.movie);
-                } catch(err) { console.error('[SW] Inject error:', err); }
+                try { addBtn(e.object.activity.render(), e.data.movie); } catch(err) { console.error('[SW]', err); }
             });
         } catch(err) {}
-
         try { _sw.initSettings(); } catch(err) {}
         try { _sw.injectCSS(); } catch(err) {}
-        try { registerController(); } catch(err) {}
-
-        console.log('[ShouldWatch] v7.0 initialized.');
+        console.log('[ShouldWatch] v8.0 TV-adapted initialized.');
     }
 
     try {
