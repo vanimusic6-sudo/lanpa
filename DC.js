@@ -126,7 +126,7 @@
         loadCredits: loadCredits,
         initSettings: initSettings,
         injectCSS: injectCSS
-    } if (!window._sw_internal) return;
+    }    if (!window._sw_internal) return;
     var _sw = window._sw_internal;
     var isRolling = false;
 
