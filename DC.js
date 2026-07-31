@@ -5,16 +5,15 @@
     window.should_watch_plugin_installed = true;
 
     var PLUGIN_ID = 'should_watch_plugin';
-    var ICON = '<svg viewBox="0 0 100 100" width="30" height="30" xmlns="http://www.w3.org/2000/svg"><g stroke="currentColor" stroke-width="8" stroke-linecap="square" fill="none"><path d="M20,55 L40,75 L80,25"/><path d="M25,25 L75,75" stroke-dasharray="4,4"/></g></svg>';
+    var ICON = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
     /* ==========================================================================
-       НАСТРОЙКИ
+       НАСТРОЙКИ (ИСПРАВЛЕННЫЕ)
        ========================================================================== */
 
     function getSetting(key, def) {
         try {
-            var fullKey = PLUGIN_ID + '_' + key;
-            var val = Lampa.Storage.get(fullKey);
+            var val = Lampa.Storage.get(PLUGIN_ID + '_' + key);
             if (val !== undefined && val !== null && val !== '') return val;
         } catch(e) {}
         return def;
@@ -37,7 +36,9 @@
 
     function parseBL(str) {
         if (!str || typeof str !== 'string') return [];
-        return str.split(',').map(function(s) { return s.trim().toLowerCase(); }).filter(Boolean);
+        return str.split(',').map(function(s) { 
+            return s.trim().toLowerCase().replace(/\s+/g, ' '); 
+        }).filter(Boolean);
     }
 
     function initSettings() {
@@ -62,13 +63,16 @@
                 component: PLUGIN_ID,
                 param: { name: PLUGIN_ID + '_' + p.name, type: p.type, values: p.values || '', default: p.default },
                 field: { name: p.title, description: p.description },
-                onChange: function(val) { saveSetting(p.name, val); }
+                onChange: function(val) { 
+                    // Прямая запись при изменении — гарантирует сохранение
+                    saveSetting(p.name, val); 
+                }
             });
         });
     }
 
     /* ==========================================================================
-       СТИЛИ (TV-адаптация: фокус, скролл, безопасная зона)
+       СТИЛИ (БОКОВАЯ ПАНЕЛЬ + TV/TOUCH/MOUSE)
        ========================================================================== */
 
     function injectCSS() {
@@ -76,22 +80,39 @@
         var s = document.createElement('style');
         s.id = 'sw-plugin-styles';
         s.innerHTML =
-            '.sw-modal-content{padding:20px;color:#fff;font-family:sans-serif}' +
+            /* Боковая панель */
+            '.sw-side-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9998;opacity:0;transition:opacity .3s;pointer-events:none}' +
+            '.sw-side-overlay.active{opacity:1;pointer-events:auto}' +
+            '.sw-side-panel{position:fixed;top:0;right:-480px;width:480px;height:100%;background:#1a1a1a;z-index:9999;transition:right .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:-5px 0 30px rgba(0,0,0,.5)}' +
+            '.sw-side-panel.active{right:0}' +
+            '.sw-panel-header{padding:25px 30px;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0}' +
+            '.sw-panel-title{font-size:1.3em;font-weight:bold;color:#fff;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+            '.sw-panel-body{flex:1;overflow-y:auto;padding:25px 30px;scroll-behavior:smooth;-webkit-overflow-scrolling:touch}' +
+            '.sw-panel-body::-webkit-scrollbar{width:4px}' +
+            '.sw-panel-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:2px}' +
+
+            /* Кнопка костей */
             '.sw-dice-section{text-align:center;margin-bottom:30px;padding:20px;background:rgba(255,255,255,.03);border-radius:12px}' +
-            '.sw-dice-btn{background:#eadecd;color:#1a1a1a;font-size:1.4em;font-weight:bold;padding:15px 40px;border-radius:30px;display:inline-flex;align-items:center;gap:15px;transition:transform .2s,background .2s,box-shadow .2s;cursor:pointer;outline:none;border:3px solid transparent}' +
+            '.sw-dice-btn{background:#eadecd;color:#1a1a1a;font-size:1.3em;font-weight:bold;padding:14px 35px;border-radius:30px;display:inline-flex;align-items:center;gap:12px;transition:all .2s;cursor:pointer;outline:none;border:3px solid transparent}' +
             '.sw-dice-btn.focus{background:#fff;transform:scale(1.05);box-shadow:0 0 0 3px #fff,0 0 20px rgba(255,255,255,.4);border-color:#fff}' +
             '.sw-dice-btn.shake{animation:swShake .5s}' +
-            '.sw-verdict{margin-top:15px;font-size:1.6em;font-weight:bold;min-height:40px;text-transform:uppercase}' +
+            '.sw-verdict{margin-top:15px;font-size:1.5em;font-weight:bold;min-height:38px;text-transform:uppercase}' +
             '.sw-verdict.verdict-yes{color:#85c25e!important;text-shadow:0 0 10px rgba(133,194,94,.3)}' +
             '.sw-verdict.verdict-no{color:#d9534f!important;text-shadow:0 0 10px rgba(217,83,79,.3)}' +
-            '.sw-columns{display:flex;justify-content:space-between;gap:20px;margin-bottom:25px}' +
-            '.sw-col{flex:1;background:rgba(255,255,255,.05);padding:15px;border-radius:10px}' +
-            '.sw-title{font-size:1.1em;font-weight:bold;margin-bottom:15px;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:10px}' +
-            '.sw-title.pros{color:#85c25e}.sw-title.cons{color:#d9534f}.sw-title.target{color:#e0e0e0}' +
-            '.sw-list{margin:0;padding-left:20px;font-size:.95em;line-height:1.5;color:#ccc}' +
-            '.sw-list li{margin-bottom:10px}' +
-            '.sw-target-audience{background:rgba(255,255,255,.05);padding:20px;border-radius:10px;line-height:1.6;color:#ddd;font-size:1.05em}' +
-            '@keyframes swShake{0%,100%{transform:translate(1px,-2px) rotate(-1deg)}10%,30%,50%,70%,90%{transform:translate(-1px,2px) rotate(1deg)}20%,40%,60%,80%{transform:translate(-3px,0) rotate(0deg)}}';
+
+            /* Списки */
+            '.sw-section{margin-bottom:25px}' +
+            '.sw-section-title{font-size:1em;font-weight:bold;margin-bottom:12px;text-transform:uppercase;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:8px}' +
+            '.sw-section-title.pros{color:#85c25e}.sw-section-title.cons{color:#d9534f}.sw-section-title.target{color:#e0e0e0}' +
+            '.sw-list{margin:0;padding-left:18px;font-size:.9em;line-height:1.5;color:#ccc}' +
+            '.sw-list li{margin-bottom:8px}' +
+            '.sw-audience-text{color:#ddd;font-size:.95em;line-height:1.6}' +
+
+            /* Анимация */
+            '@keyframes swShake{0%,100%{transform:translate(1px,-2px) rotate(-1deg)}10%,30%,50%,70%,90%{transform:translate(-1px,2px) rotate(1deg)}20%,40%,60%,80%{transform:translate(-3px,0) rotate(0deg)}}' +
+
+            /* Адаптация под маленькие экраны */
+            '@media(max-width:600px){.sw-side-panel{width:100%;right:-100%}}';
         document.head.appendChild(s);
     }
 
@@ -118,7 +139,96 @@
     }
 
     /* ==========================================================================
-       АНАЛИЗАТОР v8 (живые тексты + исправленные черные списки)
+       ГЕНЕРАТОР ВАРИАЦИЙ ТЕКСТА
+       ========================================================================== */
+
+    function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    function buildAudience(genre, actor, director, rating, votes, quality, runtime, isSeq, lang, mG, mA, mD) {
+        var genrePhrases = [];
+        if (genre && !mG.length) {
+            genrePhrases = [
+                'поклонникам жанра «' + genre + '»',
+                'тем, кто получает удовольствие от ' + genre,
+                'любителям ' + genre,
+                'фанатам направления «' + genre + '»',
+                'зрителям, которым близок ' + genre
+            ];
+        }
+
+        var actorPhrases = [];
+        if (actor && !mA.length) {
+            actorPhrases = [
+                'с участием ' + actor,
+                'где играет ' + actor,
+                'ради актёрской работы ' + actor,
+                'поклонникам таланта ' + actor,
+                'тех, кому нравится ' + actor
+            ];
+        }
+
+        var directorPhrases = [];
+        if (director && !mD.length) {
+            directorPhrases = [
+                'в стиле режиссёра ' + director,
+                'от автора ' + director,
+                'снятых рукой ' + director,
+                'для ценителей почерка ' + director
+            ];
+        }
+
+        var ratingPhrases = [];
+        if (rating >= 7.5 && votes >= 200) {
+            ratingPhrases = [
+                'высокие оценки зрителей говорят сами за себя',
+                'рейтинг ' + rating.toFixed(1) + ' подтверждает качество',
+                'тысячи зрителей уже оценили этот фильм высоко',
+                'надёжный выбор с рейтингом ' + rating.toFixed(1)
+            ];
+        } else if (rating >= 6 && votes >= 50) {
+            ratingPhrases = [
+                'рейтинг ' + rating.toFixed(1) + ' выглядит достойно',
+                'оценка ' + rating.toFixed(1) + ' обещает неплохой просмотр',
+                'зрители ставят твёрдую ' + rating.toFixed(1)
+            ];
+        }
+
+        var extraPhrases = [];
+        if (quality) extraPhrases.push('доступно в ' + quality);
+        if (runtime > 0 && runtime <= 100) extraPhrases.push('идеально на один вечер');
+        if (runtime > 150) extraPhrases.push('хватит времени (' + runtime + ' мин.)');
+        if (isSeq) extraPhrases.push('часть известной франшизы');
+        if (lang === 'ru') extraPhrases.push('оригинал на русском');
+
+        // Выбор структуры предложения (4 варианта)
+        var structure = Math.floor(Math.random() * 4);
+        var result = '';
+
+        if (structure === 0 && genrePhrases.length && actorPhrases.length) {
+            result = pickRandom(genrePhrases) + ', особенно ' + pickRandom(actorPhrases) + '.';
+            if (ratingPhrases.length) result += ' ' + pickRandom(ratingPhrases).charAt(0).toUpperCase() + pickRandom(ratingPhrases).slice(1) + '.';
+        } else if (structure === 1 && directorPhrases.length) {
+            result = 'Фильм ' + pickRandom(directorPhrases) + '.';
+            if (genrePhrases.length) result += ' Отличный выбор для ' + pickRandom(genrePhrases) + '.';
+        } else if (structure === 2 && ratingPhrases.length) {
+            result = pickRandom(ratingPhrases).charAt(0).toUpperCase() + pickRandom(ratingPhrases).slice(1) + '.';
+            if (extraPhrases.length) result += ' Бонусом: ' + extraPhrases.slice(0, 2).join(', ') + '.';
+        } else {
+            var allParts = [].concat(genrePhrases, actorPhrases, directorPhrases, ratingPhrases, extraPhrases);
+            if (allParts.length >= 2) {
+                result = 'Подойдёт ' + pickRandom(allParts) + '; также ' + pickRandom(allParts.filter(function(p){return p !== result;})) + '.';
+            } else if (allParts.length === 1) {
+                result = 'Может понравиться ' + allParts[0] + '.';
+            } else {
+                result = 'Нет явных противопоказаний — можно попробовать.';
+            }
+        }
+
+        return result.charAt(0).toUpperCase() + result.slice(1);
+    }
+
+    /* ==========================================================================
+       АНАЛИЗАТОР v9
        ========================================================================== */
 
     function analyze(movie) {
@@ -158,7 +268,7 @@
 
             var P = [], C = [];
 
-            // Чёрные списки (исправленный поиск)
+            // Чёрные списки (строгий поиск подстроки)
             var mG = genres.filter(function(g){ var gl = g.toLowerCase(); return blG.some(function(b){return gl.indexOf(b) >= 0;}); });
             var mA = cast.filter(function(a){ var al = a.toLowerCase(); return blA.some(function(b){return al.indexOf(b) >= 0;}); });
             var mD = [].concat(dirs, wrts).filter(function(p){ var pl = p.toLowerCase(); return blD.some(function(b){return pl.indexOf(b) >= 0;}); });
@@ -201,73 +311,157 @@
             if (!P.length) P.push('ℹ️ Недостаточно метаданных');
             if (!C.length) C.push('✅ Противопоказаний не выявлено');
 
-            // --- ЖИВАЯ РЕКОМЕНДАЦИЯ (не шаблон) ---
-            var parts = [];
-            if (genres.length && !mG.length) {
-                if (cast.length && !mA.length && dirs.length && !mD.length) {
-                    parts.push(genres[0] + ' от режиссёра ' + dirs[0] + ' с участием ' + cast[0]);
-                } else if (cast.length && !mA.length) {
-                    parts.push(genres[0] + ', где играет ' + cast[0]);
-                } else if (dirs.length && !mD.length) {
-                    parts.push(genres[0] + ' в стиле ' + dirs[0]);
-                } else {
-                    parts.push(genres[0]);
-                }
-            }
-            if (r >= 7.5 && vc >= 200) parts.push('высокие оценки ' + vc + ' зрителей подтверждают качество');
-            else if (r >= minR && vc >= 50) parts.push('рейтинг ' + r.toFixed(1) + ' выглядит убедительно');
-            if (maxQuality && !isBadQuality) parts.push('доступно в ' + maxQuality);
-            if (rt > 0 && rt <= 100) parts.push('хватит на вечер без усталости');
-            else if (rt > 150) parts.push('потребуется свободное время (' + rt + ' мин.)');
-            if (seq) parts.push('продолжение известной истории');
-            if (lang === 'ru') parts.push('родной язык оригинала');
-
-            var audience;
-            if (parts.length >= 3) {
-                audience = 'Этот фильм может зацепить тех, кто ищет ' + parts[0] + '. ' + parts[1].charAt(0).toUpperCase() + parts[1].slice(1) + ', а ' + parts.slice(2).join('; ') + '.';
-            } else if (parts.length === 2) {
-                audience = 'Подойдёт тем, кому интересен ' + parts[0] + ' — ' + parts[1] + '.';
-            } else if (parts.length === 1) {
-                audience = 'Может понравиться, если вам близок ' + parts[0] + '.';
-            } else {
-                audience = 'Нет явных причин ни за, ни против — можно рискнуть.';
-            }
+            // Живая рекомендация с вариациями
+            var audience = buildAudience(
+                genres.length && !mG.length ? genres[0] : null,
+                cast.length && !mA.length ? cast[0] : null,
+                dirs.length && !mD.length ? dirs[0] : null,
+                r, vc, maxQuality && !isBadQuality ? maxQuality : null,
+                rt, seq, lang, mG, mA, mD
+            );
 
             return { pros: P, cons: C, audience: audience };
         });
     }
 
     /* ==========================================================================
-       МОДАЛКА (TV-канон: нативный скролл, кнопка наверху)
+       БОКОВАЯ ПАНЕЛЬ (TV + MOUSE + TOUCH)
        ========================================================================== */
 
-    function showModal(movie) {
-        var title = esc(movie.title || movie.name || 'Фильм');
-        var loading = $('<div class="sw-modal-content" style="text-align:center;padding:60px"><div style="font-size:2em;margin-bottom:15px">⏳</div><div style="color:#ccc">Анализируем...</div></div>');
-        var isRolling = false;
+    var panelOverlay = null;
+    var panelEl = null;
+    var panelBody = null;
+    var isRolling = false;
+    var touchStartY = 0;
+    var touchVelocity = 0;
+    var inertiaRaf = null;
 
-        Lampa.Modal.open({
-            title: 'Стоит ли смотреть: ' + title,
-            html: loading,
-            size: 'large',
-            zIndex: 1000
+    function createPanel() {
+        if (panelEl) return;
+
+        panelOverlay = $('<div class="sw-side-overlay"></div>');
+        panelEl = $('<div class="sw-side-panel"><div class="sw-panel-header"><div class="sw-panel-title"></div></div><div class="sw-panel-body"></div></div>');
+        panelBody = panelEl.find('.sw-panel-body');
+
+        $('body').append(panelOverlay).append(panelEl);
+
+        // Закрытие по клику на оверлей
+        panelOverlay.on('click', closePanel);
+
+        // Сенсорный скролл
+        panelBody[0].addEventListener('touchstart', function(e) {
+            cancelInertia();
+            touchStartY = e.touches[0].clientY;
+            touchVelocity = 0;
+        }, { passive: true });
+
+        panelBody[0].addEventListener('touchmove', function(e) {
+            var y = e.touches[0].clientY;
+            var dy = touchStartY - y;
+            panelBody.scrollTop(panelBody.scrollTop() + dy);
+            touchVelocity = dy;
+            touchStartY = y;
+        }, { passive: true });
+
+        panelBody[0].addEventListener('touchend', function() {
+            startInertia(touchVelocity);
+        }, { passive: true });
+    }
+
+    function cancelInertia() {
+        if (inertiaRaf) { cancelAnimationFrame(inertiaRaf); inertiaRaf = null; }
+    }
+
+    function startInertia(velocity) {
+        cancelInertia();
+        var friction = 0.92;
+        var minV = 0.5;
+        function step() {
+            if (Math.abs(velocity) < minV) { inertiaRaf = null; return; }
+            panelBody.scrollTop(panelBody.scrollTop() + velocity);
+            velocity *= friction;
+            inertiaRaf = requestAnimationFrame(step);
+        }
+        inertiaRaf = requestAnimationFrame(step);
+    }
+
+    function openPanel(title, contentHtml) {
+        createPanel();
+        panelEl.find('.sw-panel-title').text(title);
+        panelBody.html(contentHtml);
+        panelOverlay.addClass('active');
+        panelEl.addClass('active');
+
+        // Фокус на кнопку костей
+        setTimeout(function() {
+            var btn = panelBody.find('#sw-dice-btn');
+            if (btn.length) Lampa.Controller.collectionFocus(btn);
+        }, 350);
+    }
+
+    function closePanel() {
+        cancelInertia();
+        isRolling = false;
+        if (panelOverlay) panelOverlay.removeClass('active');
+        if (panelEl) panelEl.removeClass('active');
+        Lampa.Controller.toggle('full');
+    }
+
+    /* ==========================================================================
+       КОНТРОЛЛЕР ДЛЯ БОКОВОЙ ПАНЕЛИ
+       ========================================================================== */
+
+    function registerController() {
+        Lampa.Controller.add('should_watch_panel', {
+            toggle: function() {
+                if (panelBody) {
+                    Lampa.Controller.collectionSet(panelBody);
+                    var btn = panelBody.find('#sw-dice-btn');
+                    if (btn.length) Lampa.Controller.collectionFocus(btn);
+                }
+            },
+            up: function() {
+                if (panelBody && panelBody.scrollTop() > 0) {
+                    panelBody.animate({ scrollTop: panelBody.scrollTop() - 100 }, 100);
+                }
+            },
+            down: function() {
+                if (panelBody) {
+                    var max = panelBody[0].scrollHeight - panelBody.outerHeight();
+                    if (panelBody.scrollTop() < max) {
+                        panelBody.animate({ scrollTop: panelBody.scrollTop() + 100 }, 100);
+                    }
+                }
+            },
+            left: function() {},
+            right: function() {},
+            back: function() { closePanel(); }
         });
+    }
+
+    /* ==========================================================================
+       ПОКАЗАТЬ ПАНЕЛЬ
+       ========================================================================== */
+
+    function showPanel(movie) {
+        var title = movie.title || movie.name || 'Фильм';
+        var loading = '<div style="text-align:center;padding:60px"><div style="font-size:2em;margin-bottom:15px">⏳</div><div style="color:#ccc">Анализируем...</div></div>';
+
+        openPanel('Стоит ли смотреть: ' + title, loading);
+        Lampa.Controller.toggle('should_watch_panel');
 
         analyze(movie).then(function(a) {
-            // Кнопка и вердикт НАВЕРХУ — всегда в безопасной зоне TV
             var html = $(
-                '<div class="sw-modal-content scroll-mask">' +
-                    '<div class="sw-dice-section">' +
-                        '<div class="sw-dice-btn selector" id="sw-dice-btn"><span style="font-size:1.5em">🎲</span> Бросить кости</div>' +
-                        '<div class="sw-verdict" id="sw-verdict"></div>' +
-                    '</div>' +
-                    '<div class="sw-columns">' +
-                        '<div class="sw-col"><div class="sw-title pros">Почему стоит ✓</div><ul class="sw-list">' + a.pros.map(function(p){return '<li>' + esc(p) + '</li>';}).join('') + '</ul></div>' +
-                        '<div class="sw-col"><div class="sw-title cons">Почему не стоит ✗</div><ul class="sw-list">' + a.cons.map(function(c){return '<li>' + esc(c) + '</li>';}).join('') + '</ul></div>' +
-                    '</div>' +
-                    '<div class="sw-target-audience"><div class="sw-title target">Кому посмотреть? 🎯</div><div>' + esc(a.audience) + '</div></div>' +
-                '</div>'
+                '<div class="sw-dice-section">' +
+                    '<div class="sw-dice-btn selector" id="sw-dice-btn"><span style="font-size:1.3em">🎲</span> Бросить кости</div>' +
+                    '<div class="sw-verdict" id="sw-verdict"></div>' +
+                '</div>' +
+                '<div class="sw-section"><div class="sw-section-title pros">Почему стоит ✓</div><ul class="sw-list">' + a.pros.map(function(p){return '<li>' + esc(p) + '</li>';}).join('') + '</ul></div>' +
+                '<div class="sw-section"><div class="sw-section-title cons">Почему не стоит ✗</div><ul class="sw-list">' + a.cons.map(function(c){return '<li>' + esc(c) + '</li>';}).join('') + '</ul></div>' +
+                '<div class="sw-section"><div class="sw-section-title target">Кому посмотреть? 🎯</div><div class="sw-audience-text">' + esc(a.audience) + '</div></div>'
             );
+
+            panelBody.html(html);
 
             html.find('#sw-dice-btn').on('hover:enter click keydown', function(e) {
                 if (e.type === 'keydown' && e.keyCode !== 13 && e.keyCode !== 32) return;
@@ -288,10 +482,11 @@
                 }, 500);
             });
 
-            Lampa.Modal.update(html);
-
-            // Нативный контроллер модалки Lampa = правильный скролл + фокус
-            Lampa.Controller.toggle('modal');
+            // Возвращаем фокус на кнопку после загрузки
+            setTimeout(function() {
+                var btn = panelBody.find('#sw-dice-btn');
+                if (btn.length) Lampa.Controller.collectionFocus(btn);
+            }, 100);
         });
     }
 
@@ -302,7 +497,7 @@
     function addBtn(el, movie) {
         if (!el || !el.length || el.find('.sw-custom-button').length) return;
         var btn = $('<div class="full-start__button selector sw-custom-button" data-type="should_watch"><div class="full-start__icon">' + ICON + '</div><span>Стоит ли?</span></div>');
-        btn.on('hover:enter', function() { if (movie) showModal(movie); });
+        btn.on('hover:enter click', function() { if (movie) showPanel(movie); });
         var anchor = el.find('.view--torrent,.view--online,.view--trailer').last();
         if (anchor.length) anchor.after(btn);
         else {
@@ -324,7 +519,8 @@
         } catch(err) {}
         try { initSettings(); } catch(err) {}
         try { injectCSS(); } catch(err) {}
-        console.log('[ShouldWatch] v8.0 TV-adapted initialized.');
+        try { registerController(); } catch(err) {}
+        console.log('[ShouldWatch] v9.0 Side Panel initialized.');
     }
 
     try {
