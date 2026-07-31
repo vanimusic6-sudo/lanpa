@@ -7,6 +7,9 @@
     var PLUGIN_ID = 'should_watch_plugin';
     var ICON = '<svg viewBox="0 0 100 100" width="30" height="30" xmlns="http://www.w3.org/2000/svg"><g stroke="currentColor" stroke-width="8" stroke-linecap="square" fill="none"><path d="M20,55 L40,75 L80,25"/><path d="M25,25 L75,75" stroke-dasharray="4,4"/></g></svg>';
 
+    // Глобальный флаг блокировки броска (вне замыкания для надёжности)
+    window._sw_rolling = false;
+
     /* ==========================================================================
        НАСТРОЙКИ
        ========================================================================== */
@@ -107,9 +110,7 @@
     }
 
     /* ==========================================================================
-       АНАЛИЗАТОР v9
-       ЗАМЕНИТЕ text в массивах ниже на свои цепочки.
-       Плейсхолдеры: {rating} {votes} {runtime} {quality} {rank} {genres}
+       АНАЛИЗАТОР v9.1
        ========================================================================== */
 
     var PROS_TEMPLATES = [
@@ -121,7 +122,8 @@
         { id: 'quality',   emoji: '🎥', text: 'отличное качество видео ({quality})',   test: function(m,q){ return q && !/CAM|TS|HDCAM|SCR/i.test(q); } },
         { id: 'runtime',   emoji: '🕐', text: 'комфортный хронометраж ({runtime} мин.)', test: function(m){ return m.runtime > 0 && m.runtime <= 130; } },
         { id: 'diversity', emoji: '🏳️', text: 'дружба народов',                        test: function(m){ return (m.origin_country||[]).length > 2; } },
-        { id: 'top100',    emoji: '🔎', text: 'находка (место в топ 100)',             test: function(m){ return m.popularity >= 500; } },
+        // Находка: только если высокий рейтинг + много голосов (прокси для топа критиков)
+        { id: 'top100',    emoji: '🔎', text: 'находка (место #{rank} по оценкам критиков)', test: function(m){ return m.vote_average >= 7.5 && m.vote_count >= 1000; } },
         { id: 'new',       emoji: '🔥', text: 'горячие новинки',                       test: function(m){ var y=m.release_date?parseInt(m.release_date.substring(0,4)):0; return y>=new Date().getFullYear()-1; } }
     ];
 
@@ -136,7 +138,6 @@
         { id: 'hate',      emoji: '🚩', text: 'разжигание ненависти',                  test: function(m){ return /hate|racis|нацист|расизм|ненавист/i.test((m.overview||'').toLowerCase()); } }
     ];
 
-    // Слова для рандомной сборки «Кому подходит»
     var AUDIENCE_WORDS = [
         { word: 'экшена',                    test: function(m){ return (m.genres||[]).some(function(g){return /action|боевик/i.test(g.name);}); } },
         { word: 'качества картинки',         test: function(m,q){ return q && !/CAM|TS|HDCAM|SCR/i.test(q); } },
@@ -161,13 +162,13 @@
             var rating = parseFloat(movie.vote_average) || 0;
             var votes = parseInt(movie.vote_count) || 0;
             var runtime = parseInt(movie.runtime) || 0;
+            var popularity = parseInt(movie.popularity) || 0;
 
             var cast = (credits && credits.cast || []).slice(0, 15).map(function(c){return c.name;}).filter(Boolean);
             var crew = credits && credits.crew || [];
             var dirs = crew.filter(function(c){return c.job === 'Director';}).map(function(c){return c.name;}).filter(Boolean);
             var wrts = crew.filter(function(c){return ['Writer','Screenplay','Story','Author'].indexOf(c.job) >= 0;}).map(function(c){return c.name;}).filter(Boolean);
 
-            // Сборка плюсов
             var P = [];
             PROS_TEMPLATES.forEach(function(t) {
                 if (t.test(movie, cfg)) {
@@ -175,21 +176,20 @@
                         .replace('{rating}', rating.toFixed(1))
                         .replace('{votes}', votes)
                         .replace('{runtime}', runtime)
-                        .replace('{quality}', qualityStr || 'HD');
+                        .replace('{quality}', qualityStr || 'HD')
+                        .replace('{rank}', popularity);
                     P.push(t.emoji + ' ' + txt);
                 }
             });
 
-            // Чёрные списки
             var genres = (movie.genres||[]).map(function(g){return g.name;}).filter(Boolean);
             var mG = genres.filter(function(g){ var gl=g.toLowerCase(); return blG.some(function(b){return gl.indexOf(b)>=0;}); });
             var mA = cast.filter(function(a){ var al=a.toLowerCase(); return blA.some(function(b){return al.indexOf(b)>=0;}); });
             var mD = [].concat(dirs,wrts).filter(function(p){ var pl=p.toLowerCase(); return blD.some(function(b){return pl.indexOf(b)>=0;}); });
-            if (mG.length) P.push('⛔ Нелюбимый жанр: ' + mG.join(', '));
-            if (mA.length) P.push('⛔ Нелюбимый актёр: ' + [...new Set(mA)].slice(0,2).join(', '));
-            if (mD.length) P.push('⛔ Нелюбимый автор: ' + [...new Set(mD)].slice(0,2).join(', '));
+            if (mG.length) C_push_unique(P, '⛔ Нелюбимый жанр: ' + mG.join(', '));
+            if (mA.length) C_push_unique(P, '⛔ Нелюбимый актёр: ' + [...new Set(mA)].slice(0,2).join(', '));
+            if (mD.length) C_push_unique(P, '⛔ Нелюбимый автор: ' + [...new Set(mD)].slice(0,2).join(', '));
 
-            // Сборка минусов
             var C = [];
             CONS_TEMPLATES.forEach(function(t) {
                 if (t.test(movie, cfg)) {
@@ -204,7 +204,6 @@
             if (!P.length) P.push('ℹ️ Недостаточно метаданных');
             if (!C.length) C.push('✅ Противопоказаний не выявлено');
 
-            // Рандомная сборка «Кому подходит»
             var matchedWords = [];
             AUDIENCE_WORDS.forEach(function(w) {
                 if (w.test(movie, qualityStr)) matchedWords.push(w.word);
@@ -212,7 +211,6 @@
 
             var audience;
             if (matchedWords.length > 0) {
-                // Перемешиваем массив слов для рандомного порядка
                 var shuffled = matchedWords.slice().sort(function(){return Math.random()-0.5;});
                 audience = 'Любителям ' + shuffled.join(', ') + '.';
             } else {
@@ -223,9 +221,43 @@
         });
     }
 
+    function C_push_unique(arr, item) {
+        if (arr.indexOf(item) === -1) arr.push(item);
+    }
+
     /* ==========================================================================
-       МОДАЛКА (Исправлен Back + Фокус на кнопке)
+       КОНТРОЛЛЕР (явная регистрация для корректного Back)
        ========================================================================== */
+
+    function registerController() {
+        Lampa.Controller.add('should_watch_modal', {
+            toggle: function() {
+                var h = window._sw_currentModalHtml;
+                if (h) {
+                    Lampa.Controller.collectionSet(h);
+                    var b = h.find('#sw-dice-btn');
+                    if (b.length) Lampa.Controller.collectionFocus(b);
+                    else Lampa.Controller.collectionFocus(false, h);
+                }
+            },
+            up: function() {},
+            down: function() {},
+            left: function() {},
+            right: function() {},
+            back: function() {
+                window._sw_rolling = false;
+                window._sw_currentModalHtml = null;
+                Lampa.Modal.close();
+                Lampa.Controller.toggle('full');
+            }
+        });
+    }
+
+    /* ==========================================================================
+       МОДАЛКА
+       ========================================================================== */
+
+    window._sw_currentModalHtml = null;
 
     function showModal(movie) {
         var title = esc(movie.title || movie.name || 'Фильм');
@@ -235,15 +267,10 @@
             title: 'Стоит ли смотреть: ' + title,
             html: loading,
             size: 'large',
-            zIndex: 1000,
-            onBack: function() {
-                isRolling = false;
-                Lampa.Controller.toggle('full');
-            }
+            zIndex: 1000
         });
 
         analyze(movie).then(function(a) {
-            // Кнопка — первый .selector в scroll-mask для гарантированного фокуса
             var html = $(
                 '<div class="sw-modal-content scroll-mask">' +
                     '<div class="sw-dice-section">' +
@@ -258,27 +285,39 @@
                 '</div>'
             );
 
+            window._sw_currentModalHtml = html;
+
             html.find('#sw-dice-btn').on('hover:enter click keydown', function(e) {
-                if (e.type === 'keydown' && e.keyCode !== 13 && e.keyCode !== 32) return;
-                if (isRolling) return;
-                isRolling = true;
-                var btn = $(this), v = html.find('#sw-verdict');
-                v.attr('style', '').attr('class', 'sw-verdict').text('');
-                btn.addClass('shake');
-                setTimeout(function() {
-                    btn.removeClass('shake');
-                    if (Math.random() > 0.5) {
-                        v.text('Смотреть!').addClass('verdict-yes').css({color:'#85c25e',textShadow:'0 0 10px rgba(133,194,94,.3)'});
-                    } else {
-                        v.text('Не смотреть').addClass('verdict-no').css({color:'#d9534f',textShadow:'0 0 10px rgba(217,83,79,.3)'});
-                    }
-                    Lampa.Controller.collectionFocus(btn);
-                    isRolling = false;
-                }, 500);
+                try {
+                    if (e.type === 'keydown' && e.keyCode !== 13 && e.keyCode !== 32) return;
+                    if (window._sw_rolling) return;
+                    window._sw_rolling = true;
+                    var btn = $(this), v = html.find('#sw-verdict');
+                    v.attr('style', '').attr('class', 'sw-verdict').text('');
+                    btn.addClass('shake');
+                    setTimeout(function() {
+                        try {
+                            btn.removeClass('shake');
+                            if (Math.random() > 0.5) {
+                                v.text('Смотреть!').addClass('verdict-yes').css({color:'#85c25e',textShadow:'0 0 10px rgba(133,194,94,.3)'});
+                            } else {
+                                v.text('Не смотреть').addClass('verdict-no').css({color:'#d9534f',textShadow:'0 0 10px rgba(217,83,79,.3)'});
+                            }
+                            Lampa.Controller.collectionFocus(btn);
+                        } catch(err) { console.error('[SW] Dice render error:', err); }
+                        window._sw_rolling = false;
+                    }, 500);
+                } catch(err) {
+                    console.error('[SW] Dice handler error:', err);
+                    window._sw_rolling = false;
+                }
             });
 
             Lampa.Modal.update(html);
-            Lampa.Controller.toggle('modal');
+            Lampa.Controller.toggle('should_watch_modal');
+        }).catch(function(err) {
+            console.error('[SW] Analyze error:', err);
+            Lampa.Modal.update($('<div class="sw-modal-content" style="text-align:center;padding:40px;color:#d9534f">Ошибка анализа</div>'));
         });
     }
 
@@ -303,6 +342,7 @@
        ========================================================================== */
 
     function startPlugin() {
+        try { registerController(); } catch(err) {}
         try {
             Lampa.Listener.follow('full', function(e) {
                 if (e.type !== 'complite') return;
@@ -311,7 +351,7 @@
         } catch(err) {}
         try { initSettings(); } catch(err) {}
         try { injectCSS(); } catch(err) {}
-        console.log('[ShouldWatch] v9.0 initialized.');
+        console.log('[ShouldWatch] v9.1 initialized.');
     }
 
     try {
