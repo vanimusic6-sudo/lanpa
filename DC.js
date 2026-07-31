@@ -123,32 +123,16 @@
         return Promise.resolve(null);
     }
 
-    // Экспорт внутренних переменных и функций для Части 2
-    window._sw_internal = {
-        PLUGIN_ID: PLUGIN_ID,
-        ICON: ICON,
-        currentModalHtml: currentModalHtml,
-        isRolling: isRolling,
-        getSettings: getSettings,
-        parseBL: parseBL,
-        esc: esc,
-        loadCredits: loadCredits,
-        initSettings: initSettings,
-        injectCSS: injectCSS
-    }    // Подхватываем экспортированные данные из Части 1
-    if (!window._sw_internal) return;
-    var _sw = window._sw_internal;
-
     /* ==========================================================================
        АНАЛИЗАТОР (расширенный v7)
        ========================================================================== */
 
     function analyze(movie) {
-        return _sw.loadCredits(movie).then(function(credits) {
-            var cfg = _sw.getSettings();
-            var blG = _sw.parseBL(cfg.bad_genres);
-            var blA = _sw.parseBL(cfg.bad_actors);
-            var blD = _sw.parseBL(cfg.bad_directors);
+        return loadCredits(movie).then(function(credits) {
+            var cfg = getSettings();
+            var blG = parseBL(cfg.bad_genres);
+            var blA = parseBL(cfg.bad_actors);
+            var blD = parseBL(cfg.bad_directors);
             var minR = cfg.min_rating;
 
             var r = parseFloat(movie.vote_average) || 0;
@@ -277,36 +261,36 @@
     function registerController() {
         Lampa.Controller.add('should_watch_modal', {
             toggle: function() {
-                if (_sw.currentModalHtml) {
-                    Lampa.Controller.collectionSet(_sw.currentModalHtml);
-                    var b = _sw.currentModalHtml.find('#sw-dice-btn');
+                if (currentModalHtml) {
+                    Lampa.Controller.collectionSet(currentModalHtml);
+                    var b = currentModalHtml.find('#sw-dice-btn');
                     if (b.length) Lampa.Controller.collectionFocus(b);
-                    else Lampa.Controller.collectionFocus(false, _sw.currentModalHtml);
+                    else Lampa.Controller.collectionFocus(false, currentModalHtml);
                 }
             },
             up: function() {
-                var col = _sw.currentModalHtml && _sw.currentModalHtml.find('.sw-col-active');
+                var col = currentModalHtml && currentModalHtml.find('.sw-col-active');
                 if (col && col.length && col.scrollTop() > 0) col.animate({scrollTop: col.scrollTop() - 80}, 150);
             },
             down: function() {
-                var col = _sw.currentModalHtml && _sw.currentModalHtml.find('.sw-col-active');
+                var col = currentModalHtml && currentModalHtml.find('.sw-col-active');
                 if (col && col.length) {
                     var max = col[0].scrollHeight - col.outerHeight();
                     if (col.scrollTop() < max) col.animate({scrollTop: col.scrollTop() + 80}, 150);
                 }
             },
             left: function() {
-                if (!_sw.currentModalHtml) return;
-                _sw.currentModalHtml.find('.sw-col:last').addClass('sw-col-active');
-                _sw.currentModalHtml.find('.sw-col:first').removeClass('sw-col-active');
+                if (!currentModalHtml) return;
+                currentModalHtml.find('.sw-col:last').addClass('sw-col-active');
+                currentModalHtml.find('.sw-col:first').removeClass('sw-col-active');
             },
             right: function() {
-                if (!_sw.currentModalHtml) return;
-                _sw.currentModalHtml.find('.sw-col:first').addClass('sw-col-active');
-                _sw.currentModalHtml.find('.sw-col:last').removeClass('sw-col-active');
+                if (!currentModalHtml) return;
+                currentModalHtml.find('.sw-col:first').addClass('sw-col-active');
+                currentModalHtml.find('.sw-col:last').removeClass('sw-col-active');
             },
             back: function() {
-                _sw.isRolling = false;
+                isRolling = false;
                 Lampa.Modal.close();
                 Lampa.Controller.toggle('full');
             }
@@ -318,7 +302,7 @@
        ========================================================================== */
 
     function showModal(movie) {
-        var title = _sw.esc(movie.title || movie.name || 'Фильм');
+        var title = esc(movie.title || movie.name || 'Фильм');
         var loading = $('<div class="sw-modal-content" style="text-align:center;padding:40px"><div style="font-size:2em;margin-bottom:15px">⏳</div><div style="color:#ccc">Анализируем...</div></div>');
 
         Lampa.Modal.open({
@@ -326,17 +310,17 @@
             html: loading,
             size: 'medium',
             zIndex: 1000,
-            onBack: function() { _sw.currentModalHtml = null; _sw.isRolling = false; Lampa.Controller.toggle('full'); }
+            onBack: function() { currentModalHtml = null; isRolling = false; Lampa.Controller.toggle('full'); }
         });
 
         analyze(movie).then(function(a) {
             var html = $(
                 '<div class="sw-modal-content">' +
                     '<div class="sw-columns">' +
-                        '<div class="sw-col sw-col-active"><div class="sw-title pros">Почему стоит ✓</div><ul class="sw-list">' + a.pros.map(function(p){return '<li>' + _sw.esc(p) + '</li>';}).join('') + '</ul></div>' +
-                        '<div class="sw-col"><div class="sw-title cons">Почему не стоит ✗</div><ul class="sw-list">' + a.cons.map(function(c){return '<li>' + _sw.esc(c) + '</li>';}).join('') + '</ul></div>' +
+                        '<div class="sw-col sw-col-active"><div class="sw-title pros">Почему стоит ✓</div><ul class="sw-list">' + a.pros.map(function(p){return '<li>' + esc(p) + '</li>';}).join('') + '</ul></div>' +
+                        '<div class="sw-col"><div class="sw-title cons">Почему не стоит ✗</div><ul class="sw-list">' + a.cons.map(function(c){return '<li>' + esc(c) + '</li>';}).join('') + '</ul></div>' +
                     '</div>' +
-                    '<div class="sw-target-audience"><div class="sw-title target">Кому посмотреть? 🎯</div><div style="color:#ccc;line-height:1.5">' + _sw.esc(a.audience) + '</div></div>' +
+                    '<div class="sw-target-audience"><div class="sw-title target">Кому посмотреть? 🎯</div><div style="color:#ccc;line-height:1.5">' + esc(a.audience) + '</div></div>' +
                     '<div class="sw-dice-wrapper">' +
                         '<div class="sw-dice-btn selector" id="sw-dice-btn"><span style="font-size:1.5em">🎲</span> Бросить кости</div>' +
                         '<div class="sw-verdict" id="sw-verdict"></div>' +
@@ -344,12 +328,12 @@
                 '</div>'
             );
 
-            _sw.currentModalHtml = html;
+            currentModalHtml = html;
 
             html.find('#sw-dice-btn').on('hover:enter click keydown', function(e) {
                 if (e.type === 'keydown' && e.keyCode !== 13 && e.keyCode !== 32) return;
-                if (_sw.isRolling) return;
-                _sw.isRolling = true;
+                if (isRolling) return;
+                isRolling = true;
 
                 var btn = $(this);
                 var v = html.find('#sw-verdict');
@@ -368,7 +352,7 @@
                          .attr('style', 'color:#d9534f!important;text-shadow:0 0 10px rgba(217,83,79,.3)');
                     }
                     Lampa.Controller.collectionFocus(btn);
-                    _sw.isRolling = false;
+                    isRolling = false;
                 }, 500);
             });
 
@@ -383,7 +367,7 @@
 
     function addBtn(el, movie) {
         if (!el || !el.length || el.find('.sw-custom-button').length) return;
-        var btn = $('<div class="full-start__button selector sw-custom-button" data-type="should_watch"><div class="full-start__icon">' + _sw.ICON + '</div><span>Стоит ли?</span></div>');
+        var btn = $('<div class="full-start__button selector sw-custom-button" data-type="should_watch"><div class="full-start__icon">' + ICON + '</div><span>Стоит ли?</span></div>');
         btn.on('hover:enter', function() { if (movie) showModal(movie); });
         var anchor = el.find('.view--torrent,.view--online,.view--trailer').last();
         if (anchor.length) anchor.after(btn);
@@ -408,8 +392,8 @@
             });
         } catch(err) {}
 
-        try { _sw.initSettings(); } catch(err) {}
-        try { _sw.injectCSS(); } catch(err) {}
+        try { initSettings(); } catch(err) {}
+        try { injectCSS(); } catch(err) {}
         try { registerController(); } catch(err) {}
 
         console.log('[ShouldWatch] v7.0 initialized.');
