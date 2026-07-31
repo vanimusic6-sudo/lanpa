@@ -38,7 +38,7 @@
         window.sw_settings_ready = true;
         Lampa.SettingsApi.addComponent({ component: PLUGIN_ID, name: 'Стоит ли смотреть?', icon: ICON });
         [
-            { name: 'gemini_key', type: 'input', title: 'API-ключ Gemini', description: 'Получить: aistudio.google.com/apikey', default: '' },
+            { name: 'gemini_key', type: 'input', title: 'API-ключ Gemini', description: 'Получить: aistudio.google.com/apikey (оставьте пустым для режима "Только теги")', default: '' },
             { name: 'ai_mode', type: 'select', title: 'Режим анализа', values: {'hybrid':'ИИ + теги (рекомендуется)','ai_only':'Только ИИ','tags_only':'Только теги TMDB'}, default: 'hybrid' },
             { name: 'bad_genres', type: 'input', title: 'Нелюбимые жанры', description: 'Через запятую', default: '' },
             { name: 'bad_actors', type: 'input', title: 'Нелюбимые актёры', description: 'Через запятую', default: '' },
@@ -66,9 +66,13 @@
             '.sw-modal-content{padding:20px;color:#fff;font-family:sans-serif;max-height:72vh;overflow-y:auto;scroll-behavior:smooth;animation:swFade .25s ease}' +
             '.sw-modal-content::-webkit-scrollbar{width:5px}' +
             '.sw-modal-content::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:3px}' +
-            '.sw-mode-badge{display:inline-block;font-size:.75em;padding:3px 10px;border-radius:10px;margin-left:10px;vertical-align:middle;font-weight:600;letter-spacing:.05em;text-transform:uppercase}' +
+            '.sw-mode-badge{display:inline-flex;align-items:center;gap:6px;font-size:.75em;padding:4px 12px;border-radius:10px;margin-left:10px;vertical-align:middle;font-weight:600;letter-spacing:.05em;text-transform:uppercase}' +
             '.sw-mode-badge.ai{background:#4285f4;color:#fff}' +
             '.sw-mode-badge.tags{background:rgba(255,255,255,.15);color:#ccc}' +
+            '.sw-mode-badge.error{background:#d9534f;color:#fff}' +
+            '.sw-mode-dot{width:8px;height:8px;border-radius:50%;display:inline-block}' +
+            '.sw-mode-dot.active{background:#85c25e;box-shadow:0 0 8px #85c25e}' +
+            '.sw-mode-dot.inactive{background:#d9534f}' +
             '.sw-dice-section{text-align:center;margin-bottom:30px;padding:20px;background:rgba(255,255,255,.03);border-radius:12px}' +
             '.sw-dice-btn{background:#eadecd;color:#1a1a1a;font-size:1.4em;font-weight:bold;padding:15px 40px;border-radius:30px;display:inline-flex;align-items:center;gap:15px;transition:transform .2s,background .2s,box-shadow .2s;cursor:pointer;outline:none;border:3px solid transparent}' +
             '.sw-dice-btn.focus{background:#fff;transform:scale(1.05);box-shadow:0 0 0 3px #fff,0 0 20px rgba(255,255,255,.4);border-color:#fff}' +
@@ -139,7 +143,7 @@
     function hasKw(ctx, re) { return ctx.kw.some(function(k){ return re.test(k); }); }
 
     /* ==========================================================================
-       GEMINI API
+       GEMINI API (новый промпт в стиле пользователя)
        ========================================================================== */
 
     function analyzeWithGemini(movie) {
@@ -151,27 +155,28 @@
         var title = movie.title || movie.name || '';
         var year = (movie.release_date || movie.first_air_date || '').substring(0, 4);
         var genres = (movie.genres || []).map(function(g){ return g.name; }).join(', ');
-        var overview = (movie.overview || '').substring(0, 1000);
+        var overview = (movie.overview || '').substring(0, 1500);
         var rating = parseFloat(movie.vote_average) || 0;
         var votes = parseInt(movie.vote_count) || 0;
 
-        var prompt = 'Проанализируй фильм/сериал "' + title + '" (' + year + ').\n' +
+        var prompt = 'Ты — эксперт-кинокритик. Проанализируй "' + title + '" (' + year + ').\n' +
             'Жанры: ' + genres + '\n' +
             'Синопсис: ' + overview + '\n' +
             'Рейтинг: ' + rating + '/10 (' + votes + ' голосов)\n\n' +
-            'Верни ТОЛЬКО валидный JSON (без markdown, без пояснений):\n' +
+            'Верни ТОЛЬКО JSON (без markdown, без пояснений, без ```):\n' +
             '{\n' +
-            '  "family_friendly": true или false,\n' +
-            '  "drugs": true или false,\n' +
-            '  "violence": true или false,\n' +
-            '  "smoking_alcohol": true или false,\n' +
-            '  "explicit": true или false,\n' +
-            '  "hate_speech": true или false,\n' +
-            '  "age_restriction": "0+" или "6+" или "12+" или "16+" или "18+",\n' +
-            '  "pros": ["плюс1", "плюс2"],\n' +
-            '  "cons": ["минус1", "минус2"],\n' +
-            '  "audience": "кому подходит"\n' +
-            '}';
+            '  "pros": ["⭐ высокий рейтинг (' + rating.toFixed(1) + ')", "🎬 режиссёр: имя"],\n' +
+            '  "cons": ["🔪 жестокие сцены", "⌛ высокий хронометраж (150 мин.)"],\n' +
+            '  "audience": "Любителям экшена, драмы, хорошей музыки."\n' +
+            '}\n\n' +
+            'ПРАВИЛА:\n' +
+            '- pros: 3-7 пунктов. Начинай каждый с эмодзи (⭐ 🎵 💥 🤱 🦫 🎥 🕐 🏳️ 🔎 🔥 🎬 ✍️ 🎭 🎞 🇷🇺 🌍 🔗 🏷).\n' +
+            '- cons: 0-7 пунктов. Начинай каждый с эмодзи (💋 🚬 🎰 🔪 ⌛ 💉 📺 🚩 ⛔).\n' +
+            '- audience: одно предложение, начинай с "Любителям". Перечисляй через запятую.\n' +
+            '- НЕ добавляй пояснений, НЕ используй markdown.\n' +
+            '- Если нечего сказать в pros/cons, возвращай пустой массив [].\n' +
+            '- Пиши на русском языке.\n' +
+            '- Будь конкретным: указывай имена актёров, режиссёров, точные цифры.';
 
         return new Promise(function(res) {
             try {
@@ -182,10 +187,10 @@
                     body: JSON.stringify({
                         contents: [{ parts: [{ text: prompt }] }],
                         generationConfig: {
-                            temperature: 0.3,
+                            temperature: 0.4,
                             topK: 40,
                             topP: 0.95,
-                            maxOutputTokens: 1024
+                            maxOutputTokens: 2048
                         }
                     })
                 })
@@ -199,17 +204,18 @@
                             if (id) _aiCache[id] = json;
                             res(json);
                         } else {
+                            console.error('[SW] Gemini response error:', data);
                             res(null);
                         }
-                    } catch(e) { res(null); }
+                    } catch(e) { console.error('[SW] Gemini parse error:', e); res(null); }
                 })
-                .catch(function(){ res(null); });
-            } catch(e) { res(null); }
+                .catch(function(err){ console.error('[SW] Gemini fetch error:', err); res(null); });
+            } catch(e) { console.error('[SW] Gemini error:', e); res(null); }
         });
     }
 
     /* ==========================================================================
-       АНАЛИЗАТОР v10.0 (гибридный: ИИ + теги)
+       АНАЛИЗАТОР v11.0
        ========================================================================== */
 
     function analyze(movie) {
@@ -235,36 +241,10 @@
 
             var ctx = { kw: extra.kw };
 
-            // Если ИИ вернул результат, используем его
-            if (aiResult) {
-                var P = [], C = [];
-
-                // Плюсы от ИИ
-                if (aiResult.pros && Array.isArray(aiResult.pros)) {
-                    aiResult.pros.forEach(function(p){ if (p && typeof p === 'string') P.push(p); });
-                }
-
-                // Минусы от ИИ
-                if (aiResult.cons && Array.isArray(aiResult.cons)) {
-                    aiResult.cons.forEach(function(c){ if (c && typeof c === 'string') C.push(c); });
-                }
-
-                // Флаги от ИИ -> эмодзи-минусы
-                if (aiResult.drugs) C.push('💉 употребление наркотиков');
-                if (aiResult.violence) C.push('🔪 жестокие сцены');
-                if (aiResult.smoking_alcohol) C.push('🚬 курение или употребление алкоголя');
-                if (aiResult.explicit) C.push('💋 откровенные сцены');
-                if (aiResult.hate_speech) C.push('🚩 разжигание ненависти');
-
-                // Возрастной ценз от ИИ
-                if (aiResult.age_restriction && aiResult.age_restriction !== '0+') {
-                    C.push('🔞 возрастной ценз ' + aiResult.age_restriction + ' — не для детей');
-                }
-
-                // Семейный от ИИ
-                if (aiResult.family_friendly && !aiResult.drugs && !aiResult.violence && !aiResult.smoking_alcohol && !aiResult.explicit) {
-                    P.push('🤱 подойдет для семейного просмотра');
-                }
+            // Если ИИ вернул результат
+            if (aiResult && aiResult.pros && aiResult.cons) {
+                var P = aiResult.pros.slice();
+                var C = aiResult.cons.slice();
 
                 // Чёрные списки -> в МИНУСЫ
                 var mG = genres.filter(function(g){ var gl = g.toLowerCase(); return blG.some(function(b){ return gl.indexOf(b) >= 0; }); });
@@ -274,15 +254,15 @@
                 if (mA.length) C.push('⛔ Нелюбимый актёр: ' + [...new Set(mA)].slice(0,2).join(', '));
                 if (mD.length) C.push('⛔ Нелюбимый автор: ' + [...new Set(mD)].slice(0,2).join(', '));
 
-                if (!P.length) P.push('ℹ️ Недостаточно метаданных');
-                if (!C.length) C.push('✅ Противопоказаний не выявлено');
-
                 var audience = aiResult.audience && typeof aiResult.audience === 'string' ? aiResult.audience : 'Любителям кино без особых предпочтений.';
 
-                return { pros: P, cons: C, audience: audience, mode: 'AI' };
+                return { pros: P, cons: C, audience: audience, mode: 'AI', aiStatus: 'active' };
             }
 
-            // Фолбэк на теги TMDB (как в v9.3)
+            // Фолбэк на теги TMDB (режим tags_only или ошибка ИИ)
+            var mode = useAI ? 'AI_ERROR' : 'TAGS';
+            var aiStatus = useAI ? 'error' : 'inactive';
+
             var fDrugs   = inText(ov, /метамфетамин|варк|meth|кокаин|cocaine|героин|heroin|наркот|марихуан|каннабис|опиум|амфетамин/) || hasKw(ctx, /drug|narcotic|addiction|meth|cocaine|heroin|marijuan|substance/);
             var fViol    = inText(ov, /violenc|gore|murder|убийств|кров|жесток|насил|оружи|стрельб/) || hasKw(ctx, /violenc|gore|murder|blood|tortur|brutal|weapon|gun|fight/) || hasGenre(genres, /horror|ужас/i) || (hasGenre(genres, /crime|криминал/i) && hasGenre(genres, /thriller|триллер/i));
             var fSmoke   = inText(ov, /smok|alcohol|\bdrink\b|пьян|курени|выпив/) || hasKw(ctx, /smok|cigarette|alcohol|drink|drunk|bar/);
@@ -328,9 +308,6 @@
             if (fHate) C.push('🚩 разжигание ненависти');
             if (age !== null && age >= 16) C.push('🔞 возрастной ценз ' + age + '+ — не для детей');
 
-            if (!P.length) P.push('ℹ️ Недостаточно метаданных');
-            if (!C.length) C.push('✅ Противопоказаний не выявлено');
-
             var AW = [
                 { w: 'экшена', t: hasGenre(genres, /action|боевик/i) },
                 { w: 'качества картинки', t: q && !/CAM|TS|HDCAM|SCR/i.test(q) },
@@ -348,7 +325,7 @@
                 ? 'Любителям ' + matched.slice().sort(function(){ return Math.random() - 0.5; }).join(', ') + '.'
                 : 'Любителям кино без особых предпочтений.';
 
-            return { pros: P, cons: C, audience: audience, mode: 'TAGS' };
+            return { pros: P, cons: C, audience: audience, mode: mode, aiStatus: aiStatus };
         });
     }
 
@@ -387,7 +364,16 @@
 
         analyze(movie).then(function(a) {
             try { Lampa.Loading.stop(); } catch(e) {}
-            var badge = a.mode === 'AI' ? '<span class="sw-mode-badge ai">AI</span>' : '<span class="sw-mode-badge tags">TAGS</span>';
+            
+            var badge = '';
+            if (a.mode === 'AI') {
+                badge = '<span class="sw-mode-badge ai"><span class="sw-mode-dot active"></span>AI</span>';
+            } else if (a.mode === 'AI_ERROR') {
+                badge = '<span class="sw-mode-badge error"><span class="sw-mode-dot inactive"></span>AI (ошибка)</span>';
+            } else {
+                badge = '<span class="sw-mode-badge tags"><span class="sw-mode-dot inactive"></span>TEGS</span>';
+            }
+
             var html = $(
                 '<div class="sw-modal-content">' +
                     '<div class="sw-dice-section">' +
@@ -469,7 +455,7 @@
         } catch(err) {}
         try { initSettings(); } catch(err) {}
         try { injectCSS(); } catch(err) {}
-        console.log('[ShouldWatch] v10.0 initialized (Gemini AI integration).');
+        console.log('[ShouldWatch] v11.0 initialized (Gemini AI + visual indicators).');
     }
 
     try {
